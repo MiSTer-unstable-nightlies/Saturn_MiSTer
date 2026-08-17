@@ -352,7 +352,7 @@ module VDP2 (
 				if ({VCT,VCT0} == NEXT_TO_LAST_LINE) begin
 					LSMD <= REGS.TVMD.LSMD;//?
 					if (REGS.TVMD.LSMD == 2'b00) ODD <= 1;
-					if (F) INTERLACE_INT <= (REGS.TVMD.LSMD == 2'b11);
+					if (F) INTERLACE_INT <= REGS.TVMD.LSMD[1];
 					F <= ~F;
 //					HRES2 <= REGS.TVMD.HRESO;
 				end
@@ -3274,7 +3274,7 @@ module VDP2 (
 			BKCOEN = REGS.CLOFEN.BKCOEN;BKCOSL = REGS.CLOFSL.BKCOSL;
 			
 			BKSDEN = REGS.SDCTL.BKSDEN & SDOT.SD &                 & SCRN_EN[7];
-//			SSDEN  =                     SDOT.SD                   & SCRN_EN[7];
+			SSDEN  =                     SDOT.SD                   & SCRN_EN[7];
 			R0SDEN = REGS.SDCTL.R0SDEN & SDOT.SD & SPRIN >= R0PRIN & SCRN_EN[7];
 			N0SDEN = REGS.SDCTL.N0SDEN & SDOT.SD & SPRIN >= N0PRIN & SCRN_EN[7];
 			N1SDEN = REGS.SDCTL.N1SDEN & SDOT.SD & SPRIN >= N1PRIN & SCRN_EN[7];
@@ -3302,7 +3302,7 @@ module VDP2 (
 				if          (SON  && SPRIN                     ) begin
 					THD = SEC; THD_PRI = SEC_PRI;
 					SEC = FST; SEC_PRI = FST_PRI;
-					FST = {SCAOS,SCCEN,SCCM3,SCCRT,SCOEN,SCOSL,1'b0,SBOKEN,SLCEN,SDOT.P,SDOT.DC}; FST_PRI = SPRIN;
+					FST = {SCAOS,SCCEN,SCCM3,SCCRT,SCOEN,SCOSL,SSDEN,SBOKEN,SLCEN,SDOT.P,SDOT.DC}; FST_PRI = SPRIN;
 				end
 `ifdef DEBUG
 				FST_PRI5_DBG <= FST_PRI;

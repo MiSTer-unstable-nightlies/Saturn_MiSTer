@@ -431,7 +431,7 @@ module SH7034_PFC
 					6'h08: REG_DO <= {PACR1 & PACR1_RMASK,PACR2 & PACR2_RMASK};
 					6'h0C: REG_DO <= {PBCR1 & PBCR1_RMASK,PBCR2 & PBCR2_RMASK};
 					6'h10: REG_DO <= {PCI & PCDR_RMASK,16'h0000};
-					6'h20: REG_DO <= {CASCR & CASCR_RMASK,16'h0000};
+					6'h2C: REG_DO <= {16'h0000,CASCR & CASCR_RMASK};
 					default:REG_DO <= '0;
 				endcase
 			end

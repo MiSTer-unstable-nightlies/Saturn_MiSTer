@@ -10,7 +10,11 @@ package VDP2_PKG;
 		bit         UNUSED2;
 		bit [ 2: 0] HRESO;
 	} TVMD_t;
+`ifdef LIGHT_SATURN
+	parameter bit [15:0] TVMD_MASK = 16'h81F3;
+`else
 	parameter bit [15:0] TVMD_MASK = 16'h81F7;
+`endif
 	
 	typedef struct packed	//RW,180002
 	{
