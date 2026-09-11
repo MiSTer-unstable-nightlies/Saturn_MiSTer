@@ -221,7 +221,7 @@ module SH7604_BSC
 		bit         LL;
 		bit         CBUS_IS_SDRAM,DBUS_IS_SDRAM,BUS_IS_SDRAM,IS_SAME_BANK_SDRAM;
 		bit [ 3: 0] SDRAM_AREA;
-		bit [ 2: 0] BURST_CNT;
+		bit [ 3: 0] BURST_CNT;
 		bit         BURST_EN,BURST_SINGLE;
 		bit         BURST_LAST,BURST_PRELAST;
 		bit         SDRAM_PRECHARGE_PEND,SDRAM_INSERT_NOP,INSERT_WAIT;
@@ -250,8 +250,11 @@ module SH7604_BSC
 		else begin
 			LL = AREA_TIMIMG[A[26:25]];
 			AREA_SZ = GetAreaSZ(A[26:25],BCR1,BCR2,A0_SZ,DRAM_SZ);
-			BURST_LAST = (BURST_CNT == {2'b11,~AREA_SZ[0]});
-			BURST_PRELAST = (BURST_CNT == {1'b1,~AREA_SZ[0],1'b0});
+			case (AREA_SZ)
+				default: begin BURST_LAST = (BURST_CNT == 4'hF); BURST_PRELAST = (BURST_CNT == 4'hE); end
+				2'b10:   begin BURST_LAST = (BURST_CNT == 4'hE); BURST_PRELAST = (BURST_CNT == 4'hC); end
+				2'b11:   begin BURST_LAST = (BURST_CNT == 4'hC); BURST_PRELAST = (BURST_CNT == 4'h8); end
+			endcase
 						
 			DATA_LATCH = 0;
 			STATE_NEXT = BUS_STATE;
@@ -324,8 +327,9 @@ module SH7604_BSC
 					end
 					else if (CE_R) begin
 						case (AREA_SZ)
-							2'b10: BURST_CNT <= BURST_CNT + 3'd1;
-							2'b11: BURST_CNT <= BURST_CNT + 3'd2;
+							2'b01: BURST_CNT <= BURST_CNT + 4'd1;
+							2'b10: BURST_CNT <= BURST_CNT + 4'd2;
+							2'b11: BURST_CNT <= BURST_CNT + 4'd4;
 							default:;
 						endcase
 						if (BURST_LAST) begin
@@ -408,21 +412,22 @@ module SH7604_BSC
 				
 				TRD: begin
 					if (CE_F) begin
-						if (BURST_CNT[2:1] == 2'd0 || !BURST_SINGLE) begin
+						if (BURST_CNT[3:2] == 2'd0 || !BURST_SINGLE) begin
 							DATA_LATCH = 1;
 						end
 						RD_N <= 1;
 						CACK <= 0;
 					end
 					else if (CE_R) begin
-						if (!BURST_CNT[0]) begin
+						if (!BURST_CNT[1]) begin
 							if (CBUS_ACTIVE && (!BURST_SINGLE || BURST_PRELAST)) CBUSY <= 0;
 							if (DBUS_ACTIVE && (!BURST_SINGLE || BURST_PRELAST)) DBUSY <= 0;
 							BUSY <= 0;
 						end 
 						case (AREA_SZ)
-							2'b10: BURST_CNT <= BURST_CNT + 3'd1;
-							2'b11: BURST_CNT <= BURST_CNT + 3'd2;
+							2'b01: BURST_CNT <= BURST_CNT + 4'd1;
+							2'b10: BURST_CNT <= BURST_CNT + 4'd2;
+							2'b11: BURST_CNT <= BURST_CNT + 4'd4;
 							default:;
 						endcase
 						if (BURST_LAST) begin
@@ -509,11 +514,11 @@ module SH7604_BSC
 			
 			if (CE_R) begin
 				if (BUS_STATE == T0 || BUS_STATE == T2 || BUS_STATE == TWCAS || BUS_STATE == TWNOP || BUS_STATE == TRD || BUS_STATE == TRFS2 || BUS_STATE == TV2) begin
-					if (CBUS_EXT_REQ && !BUS_RLS && !BUSY && (BURST_CNT[0] || !BURST_EN)) begin
+					if (CBUS_EXT_REQ && !BUS_RLS && !BUSY && (BURST_CNT[1] || !BURST_EN)) begin
 						CBUSY <= 1;
 						CBUSY2 <= 0;
 					end
-					if (DBUS_REQ && !BUS_RLS && !BUSY && (BURST_CNT[0] || !BURST_EN)) begin
+					if (DBUS_REQ && !BUS_RLS && !BUSY && (BURST_CNT[1] || !BURST_EN)) begin
 						DBUSY <= 1;
 					end
 					if (VBUS_REQ && !BUS_RLS && !BUSY) begin
@@ -534,24 +539,25 @@ module SH7604_BSC
 							2'b01: if (!SIZE_BYTE_DISABLE) begin 
 								A[3:0] <= A[3:0] + 4'd1; 
 								case (A[1:0])
-									2'b01: begin 
+									2'b00: begin 
 										DO <= {24'h000000,BUS_DI_LATCH[23:16]};
 										WE_N <= ~{3'b000,BUS_WE_LATCH & NEXT_BA[2]};
 										NEXT_BA <= {2'b00,NEXT_BA[1:0]};
 									end
-									2'b10: begin 
+									2'b01: begin 
 										DO <= {24'h000000,BUS_DI_LATCH[15: 8]}; 
 										WE_N <= ~{3'b000,BUS_WE_LATCH & NEXT_BA[1]};
 										NEXT_BA <= {3'b000,NEXT_BA[0]};
 									end
-									2'b11: begin 
+									2'b10: begin 
 										DO <= {24'h000000,BUS_DI_LATCH[ 7: 0]};
 										WE_N <= ~{3'b000,BUS_WE_LATCH & NEXT_BA[0]}; 
 										NEXT_BA <= 4'b0000;
 									end
-									default: begin
+									2'b11: begin
+										DO <= 32'h00000000; 
 										WE_N <= 4'b1111;
-										NEXT_BA <= 4'b0000;
+										NEXT_BA <= {1'b0,{3{BURST_EN}}};
 									end
 								endcase
 							end
@@ -711,12 +717,12 @@ module SH7604_BSC
 								endcase
 								if (DBUS_IS_SDRAM && !DBUS_WE) begin
 									if (!BURST_EN || BURST_LAST) begin
-										BURST_CNT <= 3'd0;
+										BURST_CNT <= 4'd0;
 										BURST_EN <= 1;
 										BURST_SINGLE <= ~DBUS_BURST;
 									end
 								end else begin
-									BURST_CNT <= 3'd0;
+									BURST_CNT <= 4'd0;
 									BURST_EN <= 0;
 									BURST_SINGLE <= 1;
 								end
@@ -750,7 +756,7 @@ module SH7604_BSC
 								DELAYED_RFS_REQ <= RFS_REQ;
 								STATE_NEXT = DBUS_IS_SDRAM ? TRAS : T1;
 								if (!(DBUS_A[31:27] ==? 5'b00?00)) begin
-									BURST_CNT <= 3'd0;
+									BURST_CNT <= 4'd0;
 									BURST_EN <= 0;
 									BURST_SINGLE <= 1;
 									
@@ -839,12 +845,12 @@ module SH7604_BSC
 								endcase
 								if ((CBUS_BURST || CBUS_IS_SDRAM) && !CBUS_WE) begin
 									if (!BURST_EN || BURST_LAST) begin
-										BURST_CNT <= 3'd0;
+										BURST_CNT <= 4'd0;
 										BURST_EN <= 1;
 										BURST_SINGLE <= ~CBUS_BURST;
 									end
 								end else begin
-									BURST_CNT <= 3'd0;
+									BURST_CNT <= 4'd0;
 									BURST_EN <= 0;
 									BURST_SINGLE <= 1;
 								end
